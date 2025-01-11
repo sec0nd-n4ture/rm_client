@@ -1,4 +1,4 @@
-from soldat_extmod_api.mod_api import ModAPI, Vector2D, FontStyle, WHITE, BLACK, RED 
+from soldat_extmod_api.mod_api import ModAPI, Vector2D, FontStyle, WHITE, BLACK, RED, GREEN
 from soldat_extmod_api.graphics_helper.gui_addon import Container
 
 from db_client.db_client import DBClient
@@ -6,6 +6,10 @@ from auth_ui.auth_label import AuthLabel
 from auth_ui.remember_me_checkbox import RemembermeCheckbox
 from auth_ui.submit_button import SubmitButton
 from auth_ui.switch_button import SwitchButton
+
+import json
+
+CREDS_SAVEFILE = "auth_creds.json"
 
 class AuthContainer(Container):
     def __init__(self, mod_api: ModAPI, db_client: DBClient):
@@ -101,8 +105,8 @@ class AuthContainer(Container):
             child.hide()
         self.hidden = True
         self.__show_chat()
-        self.camera_controls.restore_camera_controls()
-        self.camera_controls.restore_cursor_controls()
+        self.mod_api.restore_camera_controls()
+        self.mod_api.restore_cursor_controls()
 
     def show(self):
         self.image.show()
@@ -115,3 +119,64 @@ class AuthContainer(Container):
             self.mod_api.addresses["chat_show_flag"],
             b"\x00"
         )
+
+    def submit(self):
+        is_login = self.confirm_field.hidden
+        if is_login:
+            try:
+                res = self.login(
+                    self.username_field.input_text, 
+                    self.password_field.true_text
+                )
+                if res:
+                    if self.checkbox.checked:
+                        with open(CREDS_SAVEFILE, "w") as f:
+                            json.dump({"username": self.username_field.input_text,
+                                       "password": res.hex()} , f, indent=4)
+                    self.cookie = res
+                    self.hide()
+                    self.submit_button.text.set_text("Elevate Account")
+                    self.submit_button.text.set_pos(
+                        self.submit_button.text.text_position.sub(Vector2D(53, 0))
+                    )
+                    self.title_text.set_text("Account")
+                else:
+                    self.display_status("All fields must be filled.", False)
+            except DBClient.WrongCredentialsError as e:
+                self.display_status(str(e), False)
+
+        if not is_login:
+            if self.password_field.true_text != self.confirm_field.true_text:
+                self.display_status("Passwords do not match.", False)
+            else:
+                try:
+                    res = self.register(
+                        self.username_field.input_text, 
+                        self.password_field.true_text, 
+                        self.confirm_field.true_text
+                    )
+                    if res:
+                        self.display_status("Successfully registered.", True)
+                        self.switch_button.switch()
+                    else:
+                        self.display_status("All fields must be filled.", False)
+                except DBClient.AccountExistsError as e:
+                    self.display_status(str(e), False)
+
+
+    def login(self, username: str, password: str) -> bytes:
+        if not all([username, password]):
+            return
+        return self.db_client.login(username, password)
+    
+    def register(self, username: str, password: str, confirm_pass: str) -> bytes:
+        if not all([username, password, confirm_pass]):
+            return
+        return self.db_client.register(username, password)
+
+    def display_status(self, status_message: str, success: bool):
+        text_color = GREEN if success else RED
+        self.auth_status_text.set_text(status_message)
+        self.auth_status_text.set_text_color(text_color)
+        self.auth_status_text.show()
+        self.submit_button.clickable = True
