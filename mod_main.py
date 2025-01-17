@@ -2,6 +2,7 @@ from db_client.db_client import DBClient, UPDATE_CHECK_DELAY
 from soldat_extmod_api.mod_api import ModAPI, Event
 from auth_ui.ui_account import AuthContainer
 from circular_menu import CircularMenu
+from map_manager import MapManager
 import win_precise_time
 import sys
 
@@ -12,10 +13,10 @@ SERVER_MAX_SLOTS = 20
 class ModMain:
     def __init__(self) -> None:
         self.mod_api = ModAPI()
-
         self.mod_api.subscribe_event(self.on_directx_ready, Event.DIRECTX_READY)
         self.mod_api.subscribe_event(self.on_lcontrol_down, Event.LCONTROL_DOWN)
         self.mod_api.subscribe_event(self.on_lcontrol_up, Event.LCONTROL_UP)
+        self.mod_api.subscribe_event(self.on_map_change, Event.MAP_CHANGE)
 
         self.freeze_cam = False
         self.db_client = DBClient(*DB_SERVER_ADDRESS)
@@ -29,10 +30,10 @@ class ModMain:
             self.mod_api.addresses["player_base"] + (SERVER_MAX_SLOTS * self.mod_api.addresses["player_size"])
         )
         self.mod_api.assembler.add_to_symbol_table(
-            "AlphaHookContinue", self.mod_api.addresses["TransparencyUpdater"] + 0x8
+            "AlphaHookContinue", self.mod_api.addresses["TransparencyUpdater"] + 0x6
         )
         self.mod_api.assembler.add_to_symbol_table(
-            "ColHookContinue", self.mod_api.addresses["CollisionCheck"] + 0x8
+            "ColHookContinue", self.mod_api.addresses["CollisionCheck"] + 0x6
         )
 
         self.mod_api.patcher.patch(
@@ -41,6 +42,8 @@ class ModMain:
         self.mod_api.patcher.patch(
             "custom_patches/collision_patch.asm", "CollisionCheck", padding=3
         )
+        self.map_manager = MapManager(self.mod_api, self.db_client)
+        self.mod_api.event_dispatcher.map_manager = self.map_manager
 
         self.main_loop()
 
@@ -75,6 +78,12 @@ class ModMain:
         self.mod_api.restore_cursor_controls()
         self.mod_api.restore_camera_controls()
         self.freeze_cam = False
+
+    def on_map_change(self, map_name: str):
+        self.map_manager.routes = self.db_client.get_routes(map_name)
+        self.map_manager.selected_route = 0
+        cps = self.map_manager.populate_checkpoints()
+        self.mod_api.event_dispatcher.checkpoints = cps
 
 if __name__ == "__main__":
     main = ModMain()
