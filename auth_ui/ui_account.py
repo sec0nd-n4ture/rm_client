@@ -15,6 +15,7 @@ class AuthContainer(Container):
     def __init__(self, mod_api: ModAPI, db_client: DBClient):
         self.mod_api = mod_api
         self.db_client = db_client
+        self.login_success_callback = None
         self.mod_api.take_camera_controls()
         self.mod_api.take_cursor_controls()
         register_back_image = mod_api.create_interface_image(
@@ -71,7 +72,8 @@ class AuthContainer(Container):
             25, 
             "fa-lock", 
             "Admin password", 
-            27)
+            27
+        )
 
         self.admin_password_field.hide()
         self.children.append(self.admin_password_field)
@@ -134,6 +136,7 @@ class AuthContainer(Container):
                             json.dump({"username": self.username_field.input_text,
                                        "password": res.hex()} , f, indent=4)
                     self.cookie = res
+                    self.login_success_callback()
                     self.hide()
                     self.submit_button.text.set_text("Elevate Account")
                     self.submit_button.text.set_pos(
