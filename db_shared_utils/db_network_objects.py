@@ -1,3 +1,5 @@
+from soldat_extmod_api.mod_api import Vector2D
+
 class Serializable:
     def to_dict(self) -> dict:
         return self.__dict__
@@ -12,6 +14,10 @@ class RouteInfo(Serializable):
         self.route_id = route_id
         self.maintenance = maintenance
         self.checkpoint_list = checkpoint_list
+
+    @property
+    def spawn_point(self) -> Vector2D:
+        return Vector2D(self.checkpoint_list[0][1], self.checkpoint_list[0][2])
 
 class AccountInfo(Serializable):
     def __init__(self, username: str, password_hash: str):
