@@ -1,7 +1,8 @@
-from db_client.db_client import DBClient, UPDATE_CHECK_DELAY
+from db_client.db_client import DBClient, UPDATE_CHECK_DELAY, UpdateType
 from soldat_extmod_api.mod_api import ModAPI, Event
 from auth_ui.ui_account import AuthContainer
 from circular_menu import CircularMenu
+from run_manager import RunManager
 from map_manager import MapManager
 import win_precise_time
 import sys
@@ -25,20 +26,47 @@ class ModMain:
         except DBClient.MaxRetriesReachedError:
             sys.exit(1)
 
+        self.db_client.subscribe_updates(self.on_new_record, UpdateType.NEW_RECORD)
+
+        ''' 
+        This part patches the game to disable following functionalities:
+        1 - punches by other players to avoid unwanted animation cancels.
+        2 - sprite transparency updating for replay bots and applies to-
+            every player that has id bigger or equal to/than 20 which-
+            are the ids reserved for replay bots.
+        '''
+
         self.mod_api.assembler.add_to_symbol_table(
             "bots_start_address", 
             self.mod_api.addresses["player_base"] + (SERVER_MAX_SLOTS * self.mod_api.addresses["player_size"])
         )
         self.mod_api.assembler.add_to_symbol_table(
-            "AlphaHookContinue", self.mod_api.addresses["TransparencyUpdater"] + 0x6
+            "AlphaHookContinue", self.mod_api.addresses["TransparencyUpdater"] + 18
         )
         self.mod_api.assembler.add_to_symbol_table(
-            "ColHookContinue", self.mod_api.addresses["CollisionCheck"] + 0x6
+            "ColHookContinue", self.mod_api.addresses["CollisionCheck"] + 0x8
         )
 
-        self.mod_api.patcher.patch(
-            "custom_patches/transparency_patch.asm", "TransparencyUpdater", padding=3
+        patch_address = self.mod_api.patcher.patch(
+            "custom_patches/transparency_patch.asm", "TransparencyUpdater", padding=13
         )
+
+        '''
+        This part is necessary to avoid executing in the middle of our jmp instruction
+        caused by an earlier branch. The said branch does an unconditional jump to-
+        our trampoline jump but a jump instruction is 5 bytes long, hence-
+        invalidating the machine code leading to UB or crashes.
+        '''
+
+        self.mod_api.soldat_bridge.write(self.mod_api.addresses["TransparencyUpdater"]-1, b"\x05")
+        self.mod_api.soldat_bridge.write(
+            self.mod_api.addresses["TransparencyUpdater"]+5, 
+            self.mod_api.assembler.assemble(
+                f"jmp {hex(patch_address+12)}", 
+                self.mod_api.addresses["TransparencyUpdater"]+5
+            )
+        )
+
         self.mod_api.patcher.patch(
             "custom_patches/collision_patch.asm", "CollisionCheck", padding=3
         )
@@ -54,6 +82,8 @@ class ModMain:
             try:
                 if hasattr(self, "circular_menu"):
                     self.circular_menu.update_transitions()
+                if hasattr(self, "run_manager"):
+                    self.run_manager.tick()
                 self.mod_api.tick_event_dispatcher()
                 t2 = win_precise_time.time()
                 if (t2 - t1) >= UPDATE_CHECK_DELAY:
@@ -63,9 +93,11 @@ class ModMain:
                 break
         sys.exit(1)
 
+# Callbacks -----------------------------------
     def on_directx_ready(self):
         self.auth_container = AuthContainer(self.mod_api, self.db_client)
         self.circular_menu = CircularMenu(self.mod_api, self.mod_api.get_gui_frame())
+        self.auth_container.login_success_callback = self.on_login_success
         self.mod_api.enable_drawing()
 
     def on_lcontrol_down(self):
@@ -84,6 +116,14 @@ class ModMain:
         self.map_manager.selected_route = 0
         cps = self.map_manager.populate_checkpoints()
         self.mod_api.event_dispatcher.checkpoints = cps
+
+    def on_login_success(self):
+        self.map_manager.cookie = self.auth_container.cookie
+        self.run_manager = RunManager(self.mod_api, self.map_manager)
+
+    def on_new_record(self, replay_ids: list[int]):
+        print(f"records received {replay_ids}")
+# ----------------------------------------------------------------------
 
 if __name__ == "__main__":
     main = ModMain()
