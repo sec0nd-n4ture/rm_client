@@ -34,7 +34,10 @@ class CheckPoint(ImageNode, Interactive, Rectangle):
         self.next: CheckPoint = None
         self.previous: CheckPoint = None
         self.number = number
-        self.center = Vector2D(853/2, 480/2)
+
+        # On versions before 1.7.1.1 top left was considered "center"
+        self.center = Vector2D(853/2, 480/2) if self.mod_api._exec_hash == 1802620099 else Vector2D.zero()
+
         if not hasattr(self, "_initialized"):
             self.image_data = self.mod_api.graphics_manager.load_image(
                 "mod_graphics/checkpoint.png"
