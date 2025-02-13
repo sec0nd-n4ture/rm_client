@@ -16,12 +16,12 @@ class ReplayBot(Player):
         except BotContainer.InsufficentPlayerSlotsError:
             return None
 
-    def __init__(self, mod_api: ModAPI, id: int, replay_data: ReplayData):
-        super().__init__(mod_api, id)
-        self.mod_api = mod_api
-        self.soldat_bridge = mod_api.soldat_bridge
+    def __init__(self):
+        self.mod_api = ModAPI() # singleton workaround
+        super().__init__(self.mod_api, self.id)
+        self.soldat_bridge = self.mod_api.soldat_bridge
         self.snapshot_index = 0
-        self.replay_data = replay_data
+        self.replay_data: ReplayData = None
         self.paused = False
 
     def add(self, 
@@ -115,7 +115,7 @@ class ReplayBot(Player):
         self.set_velocity(new_velocity)
 
     def set_transparency(self, new_transparency: bytes):
-        self.set_transparency(new_transparency)
+        super().set_transparency(new_transparency)
 
     def update_mouse_pos(self, new_pos: bytes):
         self.set_mouse_world_pos(new_pos)
@@ -136,6 +136,7 @@ class ReplayBot(Player):
                 self.update_velocity(Vector2D.zero())
             else:
                 self.update_velocity(self.replay_data.get_velocity(self.snapshot_index))
+            self.update_mouse_pos(self.replay_data.get_mouse_pos(self.snapshot_index))
 
     @property
     def replay_max_index(self):
