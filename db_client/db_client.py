@@ -102,7 +102,6 @@ class DBClient:
             elif resp == ResponseID.VERIFICATION_FAILURE.value:
                 return False
             elif resp == ResponseID.NOT_AUTHENTICATED.value:
-                print("Not authenticated.")
                 return False
             return False
         elif resp == ResponseID.INVALID_PARAMETERS.value:

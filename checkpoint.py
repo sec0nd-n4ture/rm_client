@@ -90,7 +90,6 @@ class CheckPoint(ImageNode, Interactive, Rectangle):
         self.mod_api.subscribe_event(self.on_checkpoint_enter, Event.PLAYER_COLLIDE_ENTER)
 
     def set_position(self, position: Vector2D):
-        print(self.__width_half, self.__height_half)
         self.position = position
         self.set_pos(position)
         self.text.set_pos(position - Vector2D(self.__width_half, self.__height_half) + self.center)
