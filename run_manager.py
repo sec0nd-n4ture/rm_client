@@ -1,14 +1,16 @@
 from soldat_extmod_api.mod_api import ModAPI, Event, Vector2D
 from db_shared_utils.db_shared import ReplayData
+from replay_manager import ReplayManager
 from map_manager import MapManager
 from rm_player import RmPlayer
 import win_precise_time
 
 
 class RunManager:
-    def __init__(self, mod_api: ModAPI, map_manager: MapManager) -> None:
+    def __init__(self, mod_api: ModAPI, map_manager: MapManager, replay_manager: ReplayManager) -> None:
         self.mod_api = mod_api
         self.map_manager = map_manager
+        self.replay_manager = replay_manager
         self.db_client = map_manager.db_client
         self.mod_api.subscribe_event(self.on_run_start, Event.RUN_START)
         self.mod_api.subscribe_event(self.on_run_finish, Event.RUN_FINISH)
@@ -55,6 +57,7 @@ class RunManager:
         self.own_player.set_position(self.map_manager.get_current_route().spawn_point)
         self.own_player.set_velocity(Vector2D.zero())
         self.pause_recording = False
+        self.replay_manager.reset_all_replays()
 
     def tick(self):
         elapsed = win_precise_time.time() - self.__past_time
