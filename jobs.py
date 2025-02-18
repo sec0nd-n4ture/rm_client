@@ -1,5 +1,5 @@
 from typing import TYPE_CHECKING
-
+from auth_ui.auth_ui_constants import CREDS_SAVEFILE
 from soldat_extmod_api.mod_api import ModAPI, Vector2D
 
 from db_client.db_client import DBClient, ReplayData
@@ -10,7 +10,6 @@ import json
 
 if TYPE_CHECKING:
     from auth_ui.ui_account import AuthContainer
-    from auth_ui.auth_ui_constants import CREDS_SAVEFILE
     from top_panel_ui.ui_top import TopPanel
 
 

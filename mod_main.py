@@ -3,6 +3,7 @@ from db_client.db_client import DBClient, UpdateType
 from info_provider.info_provider import InfoProvider
 from soldat_extmod_api.mod_api import ModAPI, Event
 from auth_ui.ui_account import AuthContainer
+from mod_config import DB_SERVER_ADDRESS
 from top_panel_ui.ui_top import TopPanel
 from replay_manager import ReplayManager
 from circular_menu import CircularMenu
@@ -11,7 +12,6 @@ from map_manager import MapManager
 import win_precise_time
 import sys
 
-DB_SERVER_ADDRESS = ("127.0.0.1", 23999)
 SERVER_MAX_SLOTS = 20
 
 
