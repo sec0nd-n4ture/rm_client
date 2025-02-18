@@ -5,7 +5,9 @@ from top_panel_ui.replay_button import ReplayButton, ReplayCloseButton
 from top_panel_ui.panel_row import PanelRow
 from top_panel_ui.ui_top_constants import *
 
+from info_provider.info_provider import InfoProvider
 from replay_manager import ReplayManager
+from jobs import AddReplaybotJob
 
 def medal_only_method(func):
     def wrapper(self, *args):
@@ -16,8 +18,15 @@ def medal_only_method(func):
     return wrapper
 
 class ScoreRow(PanelRow):
-    def __init__(self, mod_api: ModAPI, parent: UIElement, medal: Medal = None):
+    def __init__(
+            self, 
+            mod_api: ModAPI, 
+            parent: UIElement, 
+            info_provider: InfoProvider,
+            medal: Medal = None
+        ):
         super().__init__(mod_api, parent)
+        self.info_provider = info_provider
         self.medal = medal
         self.place = None
         self.replay_id = None
@@ -113,7 +122,13 @@ class ScoreRow(PanelRow):
             self.replay_manager.bots[self.replay_id].play()
         else:
             medal = self.medal if self.is_first_page else Medal.NONE
-            self.replay_manager.add_replay(medal, self.replay_id)
+            self.info_provider.submit_job(
+                AddReplaybotJob(
+                    self.replay_manager,
+                    medal,
+                    self.replay_id
+                )
+            )
         self.replay_states[self.replay_id] = True
         self.replay_close_button.show()
 

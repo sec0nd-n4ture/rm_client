@@ -1,17 +1,26 @@
 from soldat_extmod_api.mod_api import ModAPI, Event, Vector2D
+from info_provider.info_provider import InfoProvider
 from db_shared_utils.db_shared import ReplayData
 from replay_manager import ReplayManager
 from map_manager import MapManager
+from jobs import RecordUpdateJob
 from rm_player import RmPlayer
 import win_precise_time
 
 
 class RunManager:
-    def __init__(self, mod_api: ModAPI, map_manager: MapManager, replay_manager: ReplayManager) -> None:
+    def __init__(
+            self, 
+            mod_api: ModAPI, 
+            map_manager: MapManager, 
+            replay_manager: ReplayManager,
+            info_provider: InfoProvider
+        ):
         self.mod_api = mod_api
         self.map_manager = map_manager
         self.replay_manager = replay_manager
         self.db_client = map_manager.db_client
+        self.info_provider = info_provider
         self.mod_api.subscribe_event(self.on_run_start, Event.RUN_START)
         self.mod_api.subscribe_event(self.on_run_finish, Event.RUN_FINISH)
         self.mod_api.subscribe_event(self.on_r_key_up, Event.R_KEY_UP)
@@ -30,14 +39,14 @@ class RunManager:
     def on_run_finish(self):
         run_time = self.timer.get_time_elapsed()
         self.pause_recording = True
-        route_own_time = self.map_manager.route_own_time
-        self.db_client.update_record(
-            run_time, 
-            self.map_manager.get_current_route().route_id, 
-            self.map_manager.cookie, 
-            self.map_manager.current_map_name, 
-            self.replay_buffer
-        ) if not route_own_time or run_time <= route_own_time else None
+        self.info_provider.submit_job(
+            RecordUpdateJob(
+                self.db_client,
+                self.map_manager,
+                ReplayData.copy(self.replay_buffer),
+                run_time
+            )
+        )
         print(round(run_time, ndigits=3))
         self.restart_run()
 

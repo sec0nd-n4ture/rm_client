@@ -9,6 +9,8 @@ from top_panel_ui.score_row import ScoreRow, Medal
 from top_panel_ui.ui_top_constants import *
 from top_panel_ui.panel_row import PanelRow
 
+from info_provider.info_provider import InfoProvider
+
 from replay_manager import ReplayManager
 from map_manager import MapManager
 
@@ -20,11 +22,13 @@ class TopPanel(Container):
             map_manager: MapManager,
             replay_manager: ReplayManager,
             padding_x: float, 
-            padding_y: float):
+            padding_y: float,
+            info_provider: InfoProvider):
 
         self.mod_api = mod_api
         self.map_manager = map_manager
         self.replay_manager = replay_manager
+        self.last_top_data = {}
         super().__init__(
             mod_api.get_gui_frame(),
             padding_x,
@@ -35,6 +39,7 @@ class TopPanel(Container):
             )
         )
     
+        self.info_provider = info_provider
         self.rows: list[ScoreRow] = []
         self.rows_start_vertical_padding = 95 * PANEL_SCALE.y
         self.title_text_scale = 2.1 * PANEL_SCALE.x
@@ -89,9 +94,9 @@ class TopPanel(Container):
     def init_rows(self):
         for i in range(10):
             if i < 3:
-                row = ScoreRow(self.mod_api, self, Medal._value2member_map_[i])
+                row = ScoreRow(self.mod_api, self, self.info_provider, Medal._value2member_map_[i])
             else:
-                row = ScoreRow(self.mod_api, self, Medal._value2member_map_[3])
+                row = ScoreRow(self.mod_api, self, self.info_provider, Medal._value2member_map_[3])
                 row.set_place_text(i+1)
             self.add_row(row)
 
@@ -100,7 +105,6 @@ class TopPanel(Container):
         self.map_name_text.set_pos(self.horizontal_center)
         for row in self.rows:
             if isinstance(row, ScoreRow):
-                row.replay_button.pause()
                 row.replay_close_button.hide()
                 row.replay_states.clear()
 
@@ -127,6 +131,7 @@ class TopPanel(Container):
             row.show()
         self.page_down_button.show()
         self.page_up_button.show()
+        self.display_top_data(self.last_top_data)
 
     def add_row(self, row: 'PanelRow'):
         if self.rows:
@@ -137,6 +142,7 @@ class TopPanel(Container):
         self.rows.append(row)
 
     def display_top_data(self, top_data: dict):
+        self.last_top_data = top_data
         if not self.hidden:
             keys = list(top_data.keys()) if top_data else []
             entries_length = len(keys)

@@ -1,4 +1,6 @@
-from db_client.db_client import DBClient, UPDATE_CHECK_DELAY, UpdateType
+from jobs import TopDataDisplayJob, UpdateReplayDataJob, CheckpointPopulationJob
+from db_client.db_client import DBClient, UpdateType
+from info_provider.info_provider import InfoProvider
 from soldat_extmod_api.mod_api import ModAPI, Event
 from auth_ui.ui_account import AuthContainer
 from top_panel_ui.ui_top import TopPanel
@@ -76,11 +78,12 @@ class ModMain:
         self.map_manager = MapManager(self.mod_api, self.db_client)
         self.mod_api.event_dispatcher.map_manager = self.map_manager
 
+        self.info_provider = InfoProvider(self.db_client)
+        self.info_provider.start()
         self.main_loop()
 
     
     def main_loop(self):
-        t1 = win_precise_time.time()
         while True:
             try:
                 if hasattr(self, "circular_menu"):
@@ -90,10 +93,6 @@ class ModMain:
                 if hasattr(self, "replay_manager"):
                     self.replay_manager.tick()
                 self.mod_api.tick_event_dispatcher()
-                t2 = win_precise_time.time()
-                if (t2 - t1) >= UPDATE_CHECK_DELAY:
-                    self.db_client.update_check()
-                    t1 = t2
                 win_precise_time.sleep(0.0001)
             except KeyboardInterrupt:
                 break
@@ -101,10 +100,10 @@ class ModMain:
 
 # Callbacks -----------------------------------
     def on_directx_ready(self):
-        self.auth_container = AuthContainer(self.mod_api, self.db_client)
+        self.auth_container = AuthContainer(self.mod_api, self.db_client, self.info_provider)
         self.circular_menu = CircularMenu(self.mod_api, self.mod_api.get_gui_frame())
         self.auth_container.login_success_callback = self.on_login_success
-        self.top_panel = TopPanel(self.mod_api, self.map_manager, self.replay_manager, 275, 0)
+        self.top_panel = TopPanel(self.mod_api, self.map_manager, self.replay_manager, 275, -50, self.info_provider)
         self.top_panel.top_page_change_callback = self.on_page_change
         self.circular_menu.top_panel_button.set_action_callback(self.top_panel.hide)
         self.circular_menu.top_panel_button.toggled_action_callback(self.top_panel.show)
@@ -127,25 +126,55 @@ class ModMain:
             bot.free()
         self.replay_manager.bots.clear()
 
-        self.map_manager.routes = self.db_client.get_routes(map_name)
-        self.map_manager.selected_route = 1
-        cps = self.map_manager.populate_checkpoints()
-        self.mod_api.event_dispatcher.checkpoints = cps
+        self.info_provider.submit_job(
+            CheckpointPopulationJob(
+                self.db_client,
+                self.map_manager,
+                self.mod_api,
+                map_name
+            )
+        )
         self.top_panel.page = 0
-        self.top_panel.display_top_data(self.db_client.get_top(2, map_name, self.top_panel.page))
+
+        self.info_provider.submit_job(
+            TopDataDisplayJob(
+                self.db_client,
+                self.top_panel,
+                self.map_manager
+            )
+        )
 
     def on_login_success(self):
         self.map_manager.cookie = self.auth_container.cookie
-        self.run_manager = RunManager(self.mod_api, self.map_manager, self.replay_manager)
+        self.run_manager = RunManager(
+            self.mod_api, self.map_manager, 
+            self.replay_manager, self.info_provider
+        )
 
     def on_new_record(self, replay_ids: list[int]):
-        for replay_id in replay_ids:
-            if replay_id in self.replay_manager.bots:
-                self.replay_manager.bots[replay_id].replay_data = self.db_client.download_replay(replay_id)
-        self.top_panel.display_top_data(self.db_client.get_top(2, self.map_manager.current_map_name, self.top_panel.page))
+        self.info_provider.submit_job(
+            UpdateReplayDataJob(
+                self.db_client,
+                self.replay_manager,
+                replay_ids
+            )
+        )
+        self.info_provider.submit_job(
+            TopDataDisplayJob(
+                self.db_client,
+                self.top_panel,
+                self.map_manager
+            )
+        )
 
     def on_page_change(self):
-        self.top_panel.display_top_data(self.db_client.get_top(2, self.map_manager.current_map_name, self.top_panel.page))
+        self.info_provider.submit_job(
+            TopDataDisplayJob(
+                self.db_client,
+                self.top_panel,
+                self.map_manager
+            )
+        )
 # ----------------------------------------------------------------------
 
 if __name__ == "__main__":

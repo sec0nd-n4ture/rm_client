@@ -6,15 +6,15 @@ from auth_ui.auth_label import AuthLabel
 from auth_ui.remember_me_checkbox import RemembermeCheckbox
 from auth_ui.submit_button import SubmitButton
 from auth_ui.switch_button import SwitchButton
+from jobs import AuthInfoSubmitJob
+from info_provider.info_provider import InfoProvider
 
-import json
-
-CREDS_SAVEFILE = "auth_creds.json"
 
 class AuthContainer(Container):
-    def __init__(self, mod_api: ModAPI, db_client: DBClient):
+    def __init__(self, mod_api: ModAPI, db_client: DBClient, info_provider: InfoProvider):
         self.mod_api = mod_api
         self.db_client = db_client
+        self.info_provider = info_provider
         self.login_success_callback = None
         self.mod_api.take_camera_controls()
         self.mod_api.take_cursor_controls()
@@ -123,48 +123,7 @@ class AuthContainer(Container):
         )
 
     def submit(self):
-        is_login = self.confirm_field.hidden
-        if is_login:
-            try:
-                res = self.login(
-                    self.username_field.input_text, 
-                    self.password_field.true_text
-                )
-                if res:
-                    if self.checkbox.checked:
-                        with open(CREDS_SAVEFILE, "w") as f:
-                            json.dump({"username": self.username_field.input_text,
-                                       "password": res.hex()} , f, indent=4)
-                    self.cookie = res
-                    self.login_success_callback()
-                    self.hide()
-                    self.submit_button.text.set_text("Elevate Account")
-                    self.submit_button.text.set_pos(
-                        self.submit_button.text.text_position.sub(Vector2D(53, 0))
-                    )
-                    self.title_text.set_text("Account")
-                else:
-                    self.display_status("All fields must be filled.", False)
-            except DBClient.WrongCredentialsError as e:
-                self.display_status(str(e), False)
-
-        if not is_login:
-            if self.password_field.true_text != self.confirm_field.true_text:
-                self.display_status("Passwords do not match.", False)
-            else:
-                try:
-                    res = self.register(
-                        self.username_field.input_text, 
-                        self.password_field.true_text, 
-                        self.confirm_field.true_text
-                    )
-                    if res:
-                        self.display_status("Successfully registered.", True)
-                        self.switch_button.switch()
-                    else:
-                        self.display_status("All fields must be filled.", False)
-                except DBClient.AccountExistsError as e:
-                    self.display_status(str(e), False)
+        self.info_provider.submit_job(AuthInfoSubmitJob(self))
 
 
     def login(self, username: str, password: str) -> bytes:
