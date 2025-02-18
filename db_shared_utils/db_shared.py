@@ -52,6 +52,12 @@ class ReplayData:
     def scrap(self):
         self.data = b""
 
+    @classmethod
+    def copy(cls, replay_data: 'ReplayData'):
+        replay_copy = cls()
+        replay_copy.data = replay_data.data
+        return replay_copy
+
 class PacketID(Enum):
     ACCOUNT_CREATION = b"\x00"
     AUTHENTICATION = b"\x01"
