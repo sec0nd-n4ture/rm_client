@@ -16,7 +16,7 @@ class UpdateType(Enum):
 MAX_RECONNECT_RETRY = 7
 TIMEOUT = 10
 RECV_BUFFER_SIZE = 4096
-UPDATE_CHECK_DELAY = 0.5
+UPDATE_CHECK_DELAY = 1
 
 class DBClient:
     def __init__(self, ip: str, port: int):
