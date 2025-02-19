@@ -4,7 +4,7 @@ from db_client.db_client import DBClient
 from top_panel_ui.ui_top_constants import *
 
 from replaybot_player import ReplayBot
-from win_precise_time import time
+import time
 
 
 class ReplayManager:
@@ -35,8 +35,8 @@ class ReplayManager:
         bot.play()
 
     def tick(self):
-        if time() - self.last_tick_time >= 0.050:
-            self.last_tick_time = time()
+        if time.perf_counter() - self.last_tick_time >= 0.050:
+            self.last_tick_time = time.perf_counter()
             bots = self.bots.values()
             for bot in bots:
                 bot.inject_replay_movement()

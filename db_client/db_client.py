@@ -6,6 +6,7 @@ import json
 import hashlib
 from enum import Enum, auto
 from collections.abc import Callable
+import logging
 
 class UpdateType(Enum):
     NEW_RECORD = auto()
@@ -14,7 +15,7 @@ class UpdateType(Enum):
 
 
 MAX_RECONNECT_RETRY = 7
-TIMEOUT = 10
+TIMEOUT = 20
 RECV_BUFFER_SIZE = 4096
 UPDATE_CHECK_DELAY = 1
 
@@ -168,8 +169,16 @@ class DBClient:
         resp = self.__receive(1)
         if resp == ResponseID.SUCCESS.value:
             update_data = self.__receive()
-            update_data = json.loads(update_data)
+            if update_data:
+                try:
+                    update_data = json.loads(update_data)
+                    logging.debug(update_data)
+                except Exception as e:
+                    logging.error(str(e))
+                    return
             return update_data
+        else:
+            logging.debug("UNKNOWN RESPONSE "+resp.hex().upper())
 
     def elevate_account(self, admin_password: str, cookie: bytes):
         data = PacketID.ACCOUNT_ELEVATION.value
@@ -254,15 +263,16 @@ class DBClient:
         
     def update_check(self):
         updates = self.get_updates()
-        if "replay_ids" in updates and updates["replay_ids"]:
-            for callback in self.get_callbacks_by_type(UpdateType.NEW_RECORD):
-                callback(updates["replay_ids"])
-        if "route_change" in updates and updates["route_change"]:
-            for callback in self.get_callbacks_by_type(UpdateType.ROUTE_CHANGE):
-                callback(updates["route_change"])
-        if "maintenance" in updates and updates["maintenance"]:
-            for callback in self.get_callbacks_by_type(UpdateType.ROUTE_MAINTENANCE):
-                callback(updates["maintenance"])
+        if updates:
+            if "replay_ids" in updates and updates["replay_ids"]:
+                for callback in self.get_callbacks_by_type(UpdateType.NEW_RECORD):
+                    callback(updates["replay_ids"])
+            if "route_change" in updates and updates["route_change"]:
+                for callback in self.get_callbacks_by_type(UpdateType.ROUTE_CHANGE):
+                    callback(updates["route_change"])
+            if "maintenance" in updates and updates["maintenance"]:
+                for callback in self.get_callbacks_by_type(UpdateType.ROUTE_MAINTENANCE):
+                    callback(updates["maintenance"])
 
     def subscribe_updates(self, callback: Callable, update_type: UpdateType):
         self.add_callbacks_by_type(update_type, callback)

@@ -9,7 +9,7 @@ from replay_manager import ReplayManager
 from circular_menu import CircularMenu
 from run_manager import RunManager
 from map_manager import MapManager
-import win_precise_time
+import time
 import sys
 
 SERVER_MAX_SLOTS = 20
@@ -93,7 +93,7 @@ class ModMain:
                 if hasattr(self, "replay_manager"):
                     self.replay_manager.tick()
                 self.mod_api.tick_event_dispatcher()
-                win_precise_time.sleep(0.0001)
+                time.sleep(0.0001)
             except KeyboardInterrupt:
                 break
         sys.exit(1)

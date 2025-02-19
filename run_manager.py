@@ -5,7 +5,7 @@ from replay_manager import ReplayManager
 from map_manager import MapManager
 from jobs import RecordUpdateJob
 from rm_player import RmPlayer
-import win_precise_time
+import time
 
 
 class RunManager:
@@ -69,19 +69,19 @@ class RunManager:
         self.replay_manager.reset_all_replays()
 
     def tick(self):
-        elapsed = win_precise_time.time() - self.__past_time
+        elapsed = time.perf_counter() - self.__past_time
         if elapsed >= 0.050:
-            self.__past_time = win_precise_time.time()
+            self.__past_time = time.perf_counter()
             if not self.pause_recording:
                 self.replay_buffer += self.own_player.take_movement_snapshot()
 
 
 class Timer:
     def __init__(self):
-        self.time = win_precise_time.time()
+        self.time = time.perf_counter()
 
     def get_time_elapsed(self):
-        return win_precise_time.time() - self.time
+        return time.perf_counter() - self.time
     
     def reset(self):
-        self.time = win_precise_time.time()
+        self.time = time.perf_counter()
