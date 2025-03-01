@@ -9,15 +9,17 @@ class Serializable:
         return cls(**dict)
 
 class RouteInfo(Serializable):
-    def __init__(self, route_name, route_id, maintenance, checkpoint_list):
+    def __init__(self, route_name, route_id, maintenance, checkpoint_list, map_name):
         self.route_name = route_name
         self.route_id = route_id
         self.maintenance = maintenance
         self.checkpoint_list = checkpoint_list
+        self.map_name = map_name
 
     @property
     def spawn_point(self) -> Vector2D:
         return Vector2D(self.checkpoint_list[0][1], self.checkpoint_list[0][2])
+
 
 class AccountInfo(Serializable):
     def __init__(self, username: str, password_hash: str):
@@ -30,9 +32,8 @@ class AdminInfo(Serializable):
         self.admin_password_hash = admin_password_hash
 
 class RecordInfo(Serializable):
-    def __init__(self, record_time, route_id, map_name, password_hash, snapshots_length):
+    def __init__(self, record_time, route_id, map_name, password_hash):
         self.record_time = record_time
         self.route_id = route_id
         self.map_name = map_name
         self.password_hash = password_hash
-        self.snapshots_length = snapshots_length
