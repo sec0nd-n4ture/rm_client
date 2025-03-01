@@ -5,9 +5,7 @@ from top_panel_ui.replay_button import ReplayButton, ReplayCloseButton
 from top_panel_ui.panel_row import PanelRow
 from top_panel_ui.ui_top_constants import *
 
-from info_provider.info_provider import InfoProvider
 from replay_manager import ReplayManager
-from jobs import AddReplaybotJob
 
 def medal_only_method(func):
     def wrapper(self, *args):
@@ -21,17 +19,14 @@ class ScoreRow(PanelRow):
     def __init__(
             self, 
             mod_api: ModAPI, 
-            parent: UIElement, 
-            info_provider: InfoProvider,
+            parent: UIElement,
             medal: Medal = None
         ):
         super().__init__(mod_api, parent)
-        self.info_provider = info_provider
         self.medal = medal
         self.place = None
         self.replay_id = None
         self.replay_manager: ReplayManager = parent.replay_manager
-        self.replay_states: dict[int, bool] = {}
         if self.medal != Medal.NONE:
             self.row_gradient_image = mod_api.create_interface_image(
                 "./mod_graphics/top_panel/row_gradient.png", 
@@ -118,33 +113,19 @@ class ScoreRow(PanelRow):
         self.is_first_page = False
 
     def play_callback(self):
-        if self.replay_id in self.replay_manager.bots:
-            self.replay_manager.bots[self.replay_id].play()
+        if (self.username, self.replay_id) in self.replay_manager.bots:
+            self.replay_manager.play_bot(self.replay_id, self.username)
         else:
-            medal = self.medal if self.is_first_page else Medal.NONE
-            self.info_provider.submit_job(
-                AddReplaybotJob(
-                    self.replay_manager,
-                    medal,
-                    self.replay_id
-                )
-            )
-        self.replay_states[self.replay_id] = True
-        self.replay_close_button.show()
+            self.replay_manager.add_replay(self.replay_id, self.username, self)
+            self.replay_close_button.show()
 
     def pause_callback(self):
-        if self.replay_id in self.replay_manager.bots:
-            self.replay_manager.bots[self.replay_id].pause()
-            self.replay_states[self.replay_id] = False
+        self.replay_manager.pause_bot(self.replay_id, self.username)
 
     def replay_close_callback(self):
-        if self.replay_id in self.replay_manager.bots:
-            self.replay_states.pop(self.replay_id)
-            self.replay_button.pause()
-            bot = self.replay_manager.bots[self.replay_id]
-            self.replay_manager.bots.pop(self.replay_id)
-            del bot
-            self.replay_close_button.hide()
+        self.replay_manager.close_bot(self.replay_id, self.username)
+        self.replay_button.pause()
+        self.replay_close_button.hide()
 
     @medal_only_method
     def set_gradient_color(self, color: Color):
@@ -212,10 +193,6 @@ class ScoreRow(PanelRow):
             self.nth_text.show()
             self.medal_image.hide()
 
-    def get_replay_state(self, replay_id: int) -> bool:
-        if replay_id in self.replay_states:
-            return self.replay_states[replay_id]
-
     def hide(self):
         self.image.hide()
         if self.medal != Medal.NONE:
@@ -243,5 +220,5 @@ class ScoreRow(PanelRow):
         self.date_text.show()
         self.time_text.show()
         self.replay_button.show()
-        if self.replay_id in self.replay_manager.bots:
+        if (self.username, self.replay_id) in self.replay_manager.bots:
             self.replay_close_button.show()

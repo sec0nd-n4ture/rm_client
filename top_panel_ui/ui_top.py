@@ -9,11 +9,11 @@ from top_panel_ui.score_row import ScoreRow, Medal
 from top_panel_ui.ui_top_constants import *
 from top_panel_ui.panel_row import PanelRow
 
-from info_provider.info_provider import InfoProvider
+from db_cli import DBClient
 
 from replay_manager import ReplayManager
 from map_manager import MapManager
-
+from top_panel_ui.top_data_manager import TopData
 
 class TopPanel(Container):
     def __init__(
@@ -21,14 +21,14 @@ class TopPanel(Container):
             mod_api: ModAPI, 
             map_manager: MapManager,
             replay_manager: ReplayManager,
+            db_client: DBClient,
             padding_x: float, 
-            padding_y: float,
-            info_provider: InfoProvider):
+            padding_y: float):
 
         self.mod_api = mod_api
         self.map_manager = map_manager
         self.replay_manager = replay_manager
-        self.last_top_data = {}
+        self.db_client = db_client
         super().__init__(
             mod_api.get_gui_frame(),
             padding_x,
@@ -39,7 +39,6 @@ class TopPanel(Container):
             )
         )
     
-        self.info_provider = info_provider
         self.rows: list[ScoreRow] = []
         self.rows_start_vertical_padding = 95 * PANEL_SCALE.y
         self.title_text_scale = 2.1 * PANEL_SCALE.x
@@ -79,6 +78,11 @@ class TopPanel(Container):
         self.top_page_change_callback = None
 
         self.init_rows()
+        self.top_manager = TopData(
+            self.db_client,
+            [row for row in self.rows[1:]]
+        )
+        self.replay_manager.top_data = self.top_manager
 
         self.page_down_button = PageDownButton(self.mod_api, self, -1, -65)
         self.page_down_button.set_pos(self.corner_bottom_right)
@@ -94,9 +98,9 @@ class TopPanel(Container):
     def init_rows(self):
         for i in range(10):
             if i < 3:
-                row = ScoreRow(self.mod_api, self, self.info_provider, Medal._value2member_map_[i])
+                row = ScoreRow(self.mod_api, self, Medal._value2member_map_[i])
             else:
-                row = ScoreRow(self.mod_api, self, self.info_provider, Medal._value2member_map_[3])
+                row = ScoreRow(self.mod_api, self, Medal._value2member_map_[3])
                 row.set_place_text(i+1)
             self.add_row(row)
 
@@ -106,7 +110,6 @@ class TopPanel(Container):
         for row in self.rows:
             if isinstance(row, ScoreRow):
                 row.replay_close_button.hide()
-                row.replay_states.clear()
 
     def on_join(self):
         self.map_name_text.set_text(self.map_manager.current_map_name)
@@ -114,6 +117,7 @@ class TopPanel(Container):
 
     def hide(self):
         self.hidden = True
+        self.top_manager.top_panel_hidden = True
         self.top_panel_title.hide()
         self.map_name_text.hide()
         self.image.hide()
@@ -124,6 +128,7 @@ class TopPanel(Container):
     
     def show(self):
         self.hidden = False
+        self.top_manager.top_panel_hidden = False
         self.top_panel_title.show()
         self.map_name_text.show()
         self.image.show()
@@ -131,7 +136,7 @@ class TopPanel(Container):
             row.show()
         self.page_down_button.show()
         self.page_up_button.show()
-        self.display_top_data(self.last_top_data)
+        self.db_client.request_top(-1, self.map_manager.current_map_name, self.page, True)
 
     def add_row(self, row: 'PanelRow'):
         if self.rows:
@@ -141,42 +146,16 @@ class TopPanel(Container):
         row.set_pos(position)
         self.rows.append(row)
 
-    def display_top_data(self, top_data: dict):
-        self.last_top_data = top_data
-        if not self.hidden:
-            keys = list(top_data.keys()) if top_data else []
-            entries_length = len(keys)
-            for i in range(1,11): # starts at 2nd index because first index is occupied by column name row
-                current_row = self.rows[i]
-                if top_data:
-                    if i > entries_length:
-                        current_row.hide()
-                    else:
-                        current_row.show()
-                        current_row.switch_top3_state(self.page == 0)
-                        current_row.replay_id = top_data[keys[i-1]]["replay_id"]
-                        if current_row.replay_id in self.replay_manager.bots:
-                            current_row.replay_close_button.show()
-                        else:
-                            current_row.replay_close_button.hide()
-                        if current_row.get_replay_state(current_row.replay_id):
-                            current_row.replay_button.play()
-                        else:
-                            current_row.replay_button.pause()
-                        current_row.set_place_text(i+(self.page * 10))
-                        current_row.set_username(keys[i-1])
-                        current_row.set_record_time(top_data[keys[i-1]]["record_time"])
-                else:
-                    current_row.hide()
-
     def on_page_down_pressed(self):
         self.page += 1
+        self.top_manager.page = self.page
         self.top_page_change_callback()
 
     def on_page_up_pressed(self):
         if self.page - 1 >= 0:
             self.page -= 1
             self.top_page_change_callback()
+        self.top_manager.page = self.page
 
 class CenteredText(InterfaceText):
     def __init__(
