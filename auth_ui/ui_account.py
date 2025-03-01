@@ -1,23 +1,23 @@
 from soldat_extmod_api.mod_api import ModAPI, Vector2D, FontStyle, WHITE, BLACK, RED, GREEN
 from soldat_extmod_api.graphics_helper.gui_addon import Container
-
-from db_client.db_client import DBClient
+from db_cli import DBClient, PacketID
 from auth_ui.auth_label import AuthLabel
 from auth_ui.remember_me_checkbox import RemembermeCheckbox
 from auth_ui.submit_button import SubmitButton
 from auth_ui.switch_button import SwitchButton
-from jobs import AuthInfoSubmitJob
-from info_provider.info_provider import InfoProvider
+from auth_ui.auth_ui_constants import CREDS_SAVEFILE
+import json
 
 
 class AuthContainer(Container):
-    def __init__(self, mod_api: ModAPI, db_client: DBClient, info_provider: InfoProvider):
+    def __init__(self, mod_api: ModAPI, db_client: DBClient):
         self.mod_api = mod_api
         self.db_client = db_client
-        self.info_provider = info_provider
         self.login_success_callback = None
         self.mod_api.take_camera_controls()
         self.mod_api.take_cursor_controls()
+        self.db_client.client.register_subhandler(PacketID.AUTHENTICATION, self.login_result)
+        self.db_client.client.register_subhandler(PacketID.ACCOUNT_CREATION, self.registration_result)
         register_back_image = mod_api.create_interface_image(
             "mod_graphics/reg_ui_back.png", 
             scale=Vector2D(0.5, 0.5)
@@ -123,18 +123,59 @@ class AuthContainer(Container):
         )
 
     def submit(self):
-        self.info_provider.submit_job(AuthInfoSubmitJob(self))
+        is_login = self.confirm_field.hidden
+        if is_login:
+            res = self.login(self.username_field.input_text, self.password_field.true_text)
+            if not res:
+                self.display_status("All fields must be filled.", False)
 
+        else:
+            if self.password_field.true_text != self.confirm_field.true_text:
+                self.display_status("Passwords do not match.", False)
+            else:
+                res = self.register(
+                    self.username_field.input_text, 
+                    self.password_field.true_text, 
+                    self.confirm_field.true_text
+                )
+                if not res:
+                    self.display_status("All fields must be filled.", False)
 
-    def login(self, username: str, password: str) -> bytes:
+    def login(self, username: str, password: str):
         if not all([username, password]):
             return
-        return self.db_client.login(username, password)
+        self.db_client.login(username, password, True)
+        return True
     
-    def register(self, username: str, password: str, confirm_pass: str) -> bytes:
+    def register(self, username: str, password: str, confirm_pass: str):
         if not all([username, password, confirm_pass]):
             return
-        return self.db_client.register(username, password)
+        self.db_client.register(username, password, True)
+        return True
+
+    def login_result(self, result: bool, cookie: str):
+        if result:
+            if self.checkbox.checked:
+                with open(CREDS_SAVEFILE, "w") as f:
+                    json.dump({"username": self.username_field.input_text,
+                               "password": cookie}, f, indent=4)
+            self.cookie = bytes.fromhex(cookie)
+            self.login_success_callback()
+            self.hide()
+            self.submit_button.text.set_text("Elevate Account")
+            self.submit_button.text.set_pos(
+                self.submit_button.text.text_position.sub(Vector2D(53, 0))
+            )
+            self.title_text.set_text("Account")
+        else:
+            self.display_status("Wrong credentials.", False)
+
+    def registration_result(self, result: bool):
+        if result:
+            self.display_status("Successfully registered.", True)
+            self.switch_button.switch()
+        else:
+            self.display_status("Account already exists.", False)
 
     def display_status(self, status_message: str, success: bool):
         text_color = GREEN if success else RED

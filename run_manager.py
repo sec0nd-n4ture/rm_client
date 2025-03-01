@@ -1,9 +1,8 @@
 from soldat_extmod_api.mod_api import ModAPI, Event, Vector2D
-from info_provider.info_provider import InfoProvider
 from db_shared_utils.db_shared import ReplayData
+from db_cli import DBClient
 from replay_manager import ReplayManager
 from map_manager import MapManager
-from jobs import RecordUpdateJob
 from rm_player import RmPlayer
 import time
 
@@ -14,13 +13,12 @@ class RunManager:
             mod_api: ModAPI, 
             map_manager: MapManager, 
             replay_manager: ReplayManager,
-            info_provider: InfoProvider
+            db_client: DBClient
         ):
         self.mod_api = mod_api
         self.map_manager = map_manager
         self.replay_manager = replay_manager
-        self.db_client = map_manager.db_client
-        self.info_provider = info_provider
+        self.db_client = db_client
         self.mod_api.subscribe_event(self.on_run_start, Event.RUN_START)
         self.mod_api.subscribe_event(self.on_run_finish, Event.RUN_FINISH)
         self.mod_api.subscribe_event(self.on_r_key_up, Event.R_KEY_UP)
@@ -39,14 +37,22 @@ class RunManager:
     def on_run_finish(self):
         run_time = self.timer.get_time_elapsed()
         self.pause_recording = True
-        self.info_provider.submit_job(
-            RecordUpdateJob(
-                self.db_client,
-                self.map_manager,
+        route_own_time = self.map_manager.route_own_time
+        if not route_own_time or run_time <= route_own_time:
+            self.db_client.update_record(
+                run_time,
+                self.map_manager.get_current_route().route_id,
+                self.map_manager.cookie,
+                self.map_manager.current_map_name,
                 ReplayData.copy(self.replay_buffer),
-                run_time
+                True
             )
-        )
+            self.db_client.request_own_record(
+                self.map_manager.current_map_name, 
+                self.map_manager.get_current_route().route_id,
+                self.map_manager.cookie,
+                True
+            )
         print(round(run_time, ndigits=3))
         self.restart_run()
 
@@ -73,7 +79,7 @@ class RunManager:
         if elapsed >= 0.050:
             self.__past_time = time.perf_counter()
             if not self.pause_recording:
-                self.replay_buffer += self.own_player.take_movement_snapshot()
+                self.replay_buffer += self.own_player.take_movement_snapshot() # should be a lock here
 
 
 class Timer:

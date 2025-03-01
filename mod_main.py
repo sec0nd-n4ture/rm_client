@@ -1,7 +1,5 @@
-from jobs import TopDataDisplayJob, UpdateReplayDataJob, CheckpointPopulationJob
-from db_client.db_client import DBClient, UpdateType
-from info_provider.info_provider import InfoProvider
 from soldat_extmod_api.mod_api import ModAPI, Event
+from db_cli import DBClient, PacketID
 from auth_ui.ui_account import AuthContainer
 from mod_config import DB_SERVER_ADDRESS
 from top_panel_ui.ui_top import TopPanel
@@ -27,10 +25,12 @@ class ModMain:
         self.db_client = DBClient(*DB_SERVER_ADDRESS)
         try:
             self.db_client.connect()
-        except DBClient.MaxRetriesReachedError:
+            print("Connected to DBServer")
+        except:
+            print("Couldn't connect to DBServer")
             sys.exit(1)
+        self.db_client.start()
 
-        self.db_client.subscribe_updates(self.on_new_record, UpdateType.NEW_RECORD)
         self.replay_manager = ReplayManager(self.mod_api, self.db_client)
 
         ''' 
@@ -75,11 +75,12 @@ class ModMain:
         self.mod_api.patcher.patch(
             "custom_patches/collision_patch.asm", "CollisionCheck", padding=3
         )
-        self.map_manager = MapManager(self.mod_api, self.db_client)
+        self.map_manager = MapManager(self.mod_api)
         self.mod_api.event_dispatcher.map_manager = self.map_manager
+        self.db_client.client.register_subhandler(PacketID.RECORD_FETCH, self.map_manager.set_own_time)
+        self.db_client.client.register_subhandler(PacketID.ROUTE_FETCH, self.route_list_response)
+        self.db_client.client.register_subhandler(PacketID.NOTIFY_NEW_RECORD, self.new_record_handler)
 
-        self.info_provider = InfoProvider(self.db_client)
-        self.info_provider.start()
         self.main_loop()
 
     
@@ -100,11 +101,12 @@ class ModMain:
 
 # Callbacks -----------------------------------
     def on_directx_ready(self):
-        self.auth_container = AuthContainer(self.mod_api, self.db_client, self.info_provider)
+        self.auth_container = AuthContainer(self.mod_api, self.db_client)
         self.circular_menu = CircularMenu(self.mod_api, self.mod_api.get_gui_frame())
         self.auth_container.login_success_callback = self.on_login_success
-        self.top_panel = TopPanel(self.mod_api, self.map_manager, self.replay_manager, 275, -50, self.info_provider)
+        self.top_panel = TopPanel(self.mod_api, self.map_manager, self.replay_manager, self.db_client, 275, -50)
         self.top_panel.top_page_change_callback = self.on_page_change
+        # self.db_client.client.register_subhandler(PacketID.TOP_PLACEMENT, self.top_panel.display_top_data)
         self.circular_menu.top_panel_button.set_action_callback(self.top_panel.hide)
         self.circular_menu.top_panel_button.toggled_action_callback(self.top_panel.show)
         self.mod_api.enable_drawing()
@@ -125,55 +127,54 @@ class ModMain:
             bot.deactivate()
             bot.free()
         self.replay_manager.bots.clear()
+        self.replay_manager.row_mapping.clear()
+        self.replay_manager.username_replay_id_mapping.clear()
 
-        self.info_provider.submit_job(
-            CheckpointPopulationJob(
-                self.db_client,
-                self.map_manager,
-                self.mod_api,
-                map_name
+        self.top_panel.top_manager.replay_existence_states.clear()
+        self.top_panel.top_manager.player_medals.clear()
+        self.top_panel.top_manager.replay_states.clear()
+
+        self.db_client.request_routes(map_name, True)
+        self.map_manager.selected_route = 0
+        if hasattr(self, "auth_container") and hasattr(self.auth_container, "cookie"):
+            self.db_client.request_own_record(
+                self.map_manager.current_map_name, 
+                self.map_manager.get_current_route().route_id,
+                self.auth_container.cookie,
+                True
             )
-        )
+
         self.top_panel.page = 0
 
-        self.info_provider.submit_job(
-            TopDataDisplayJob(
-                self.db_client,
-                self.top_panel,
-                self.map_manager
-            )
-        )
+        self.db_client.request_top(-1, map_name, self.top_panel.page, True)
 
     def on_login_success(self):
         self.map_manager.cookie = self.auth_container.cookie
         self.run_manager = RunManager(
             self.mod_api, self.map_manager, 
-            self.replay_manager, self.info_provider
+            self.replay_manager, self.db_client
         )
-
-    def on_new_record(self, replay_ids: list[int]):
-        self.info_provider.submit_job(
-            UpdateReplayDataJob(
-                self.db_client,
-                self.replay_manager,
-                replay_ids
-            )
-        )
-        self.info_provider.submit_job(
-            TopDataDisplayJob(
-                self.db_client,
-                self.top_panel,
-                self.map_manager
-            )
+        self.db_client.request_own_record(
+            self.map_manager.current_map_name, 
+            -1,
+            self.auth_container.cookie,
+            True
         )
 
     def on_page_change(self):
-        self.info_provider.submit_job(
-            TopDataDisplayJob(
-                self.db_client,
-                self.top_panel,
-                self.map_manager
-            )
+        self.db_client.request_top(-1, self.map_manager.current_map_name, self.top_panel.page, True)
+
+    def route_list_response(self, routes):
+        self.map_manager.routes = routes
+        cps = self.map_manager.populate_checkpoints()
+        self.mod_api.event_dispatcher.checkpoints = cps
+
+    def new_record_handler(self, replay_id: int, _, route_id: int):
+        self.db_client.request_top(
+            route_id, 
+            self.map_manager.current_map_name, 
+            self.top_panel.page, 
+            True
         )
 # ----------------------------------------------------------------------
 
