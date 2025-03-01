@@ -140,7 +140,7 @@ class ReplayBot(Player):
 
     @property
     def replay_max_index(self):
-        return self.replay_data.get_snapshots_len
+        return self.replay_data.get_snapshots_len - 1
 
     def pause(self):
         self.paused = True
