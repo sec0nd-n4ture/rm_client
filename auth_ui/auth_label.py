@@ -108,21 +108,22 @@ class AuthLabel(TextField):
                     self.focused = False
 
     def on_anykbkey_down(self, key):
-        if not self.passwordfield:
-            return super().on_anykbkey_down(key)
-        if self.is_writing:
-            if isinstance(key, KeyCode):
-                if len(self.input_text) < self.max_text:
-                    self.input_text = self.input_text[:self.cursor_position] + "*" + self.input_text[self.cursor_position:]
-                    self.true_text += key.char
-                    self.cursor_position += 1
-                self.update_text(self.input_text)
-            elif key == Key.backspace:
-                if self.cursor_position > 0:
-                    self.input_text = self.input_text[:self.cursor_position - 1] + self.input_text[self.cursor_position:]
-                    self.true_text = self.true_text[:self.cursor_position - 1] + self.true_text[self.cursor_position:]
-                    self.cursor_position -= 1
+        if hasattr(self, "passwordfield"):
+            if not self.passwordfield:
+                return super().on_anykbkey_down(key)
+            if self.is_writing:
+                if isinstance(key, KeyCode):
+                    if len(self.input_text) < self.max_text:
+                        self.input_text = self.input_text[:self.cursor_position] + "*" + self.input_text[self.cursor_position:]
+                        self.true_text += key.char
+                        self.cursor_position += 1
                     self.update_text(self.input_text)
+                elif key == Key.backspace:
+                    if self.cursor_position > 0:
+                        self.input_text = self.input_text[:self.cursor_position - 1] + self.input_text[self.cursor_position:]
+                        self.true_text = self.true_text[:self.cursor_position - 1] + self.true_text[self.cursor_position:]
+                        self.cursor_position -= 1
+                        self.update_text(self.input_text)
 
     def on_mouse_release(self, position: Vector2D):
         self.__handle_on_mup(position)
