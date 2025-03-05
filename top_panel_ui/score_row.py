@@ -111,6 +111,7 @@ class ScoreRow(PanelRow):
         )
         self.replay_close_button.hide()
         self.is_first_page = False
+        self.hidden = False
 
     def play_callback(self):
         if (self.username, self.replay_id) in self.replay_manager.bots:
@@ -194,6 +195,7 @@ class ScoreRow(PanelRow):
             self.medal_image.hide()
 
     def hide(self):
+        self.hidden = True
         self.image.hide()
         if self.medal != Medal.NONE:
             self.row_gradient_image.hide()
@@ -207,6 +209,7 @@ class ScoreRow(PanelRow):
         self.replay_close_button.hide()
 
     def show(self):
+        self.hidden = False
         self.image.show()
         if self.medal == Medal.NONE:
             self.nth_text.show()

@@ -1,4 +1,5 @@
-from soldat_extmod_api.mod_api import ModAPI, Event
+from soldat_extmod_api.mod_api import ModAPI, Event, Color
+from general_ui.seek_bar_container import SeekBarContainer
 from db_cli import DBClient, PacketID
 from auth_ui.ui_account import AuthContainer
 from mod_config import DB_SERVER_ADDRESS
@@ -106,9 +107,21 @@ class ModMain:
         self.auth_container.login_success_callback = self.on_login_success
         self.top_panel = TopPanel(self.mod_api, self.map_manager, self.replay_manager, self.db_client, 275, -50)
         self.top_panel.top_page_change_callback = self.on_page_change
-        # self.db_client.client.register_subhandler(PacketID.TOP_PLACEMENT, self.top_panel.display_top_data)
         self.circular_menu.top_panel_button.set_action_callback(self.top_panel.hide)
         self.circular_menu.top_panel_button.toggled_action_callback(self.top_panel.show)
+        self.seek_bar = SeekBarContainer(
+            mod_api=self.mod_api, 
+            parent=self.mod_api.get_gui_frame(), 
+            padding_x=0, 
+            padding_y=220, 
+            pause_callback=self.replay_manager.pause_all_bots, 
+            play_callback=self.replay_manager.play_all_bots
+        )
+        self.seek_bar.replay_seek_bar.image.set_color(Color.from_hex("494e69ff"))
+        self.seek_bar.replay_seek_bar.slider_filled.set_color(Color.from_hex("191b24ff"))
+        self.seek_bar.replay_seek_bar.knob.map_percentage(200)
+        self.seek_bar.hide()
+        self.replay_manager.seek_bar = self.seek_bar
         self.mod_api.enable_drawing()
 
     def on_lcontrol_down(self):
@@ -129,6 +142,8 @@ class ModMain:
         self.replay_manager.bots.clear()
         self.replay_manager.row_mapping.clear()
         self.replay_manager.username_replay_id_mapping.clear()
+        self.replay_manager.longest_replay_bot = None
+        self.replay_manager.seek_bar.hide()
 
         self.top_panel.top_manager.replay_existence_states.clear()
         self.top_panel.top_manager.player_medals.clear()
